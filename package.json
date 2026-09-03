@@ -31,11 +31,14 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "chalk": "^6.0.0",
+    "chalk": "^6.0.0"
+  },
+  "peerDependencies": {
     "fastify": "^5.12.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "fastify": "^5.12.1",
     "typescript": "^5.5.0"
   },
   "files": [
