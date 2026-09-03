@@ -1,0 +1,44 @@
+{
+  "name": "@fastact/core",
+  "version": "0.1.0-dev",
+  "description": "A fantastic, vanilla-flavored web framework core powered by Fastify. Built for JS purists: strictly 0 decorators, 0 reflect-metadata magic, and 100% predictable asynchronous flow.",
+  "license": "MIT",
+  "author": "Igor Bezlepkin",
+  "repository": {
+    "type": "git",
+    "url": "github:fastactjs/core"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "fastact",
+    "fastify",
+    "web",
+    "app",
+    "http",
+    "application",
+    "framework",
+    "router",
+    "nodejs",
+    "deno",
+    "bun"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "chalk": "^6.0.0",
+    "fastify": "^5.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
