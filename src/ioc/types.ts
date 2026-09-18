@@ -1,19 +1,18 @@
-/** Public contract for configuring and building a dependency container. */
-export interface IContainerBuilder {
-  add<T>(token: InjectionToken<T>): RegistrationTarget<T>;
-  build(): Promise<ContainerInstance>;
-}
-
 export interface ContainerInstance {
   get<T>(token: InjectionToken<T>): T;
 }
 
+export interface ScopedContainerInstance {
+  get<T>(token: InjectionToken<T>): T;
+}
+
+/** A symbol token carrying the type of the dependency it identifies. */
 export interface SymbolToken<T> extends Symbol {
   readonly __type?: T;
 }
 
+/** A string or typed symbol used to identify a dependency. */
 export type InjectionToken<T> = string | SymbolToken<T>;
-
 /** The lifetime of a registered dependency. */
 export type Lifecycle = 'singleton' | 'scoped' | 'transient';
 
@@ -27,20 +26,22 @@ export interface DepEntry<T> {
   isInitialized: boolean;
 }
 
-export interface RegistrationLifecycle {
-  scoped(): IContainerBuilder;
-  singleton(): IContainerBuilder;
-  transient(): IContainerBuilder;
+export interface RegistrationLifecycle<B = any> {
+  scoped(): B;
+  singleton(): B;
+  transient(): B;
 }
 
-export interface RegistrationWithDependencies extends RegistrationLifecycle {
+export interface RegistrationWithDependencies<
+  B,
+> extends RegistrationLifecycle<B> {
   withDeps(
     ...deps: Array<InjectionToken<any> | InjectionToken<any>[]>
-  ): RegistrationLifecycle;
+  ): RegistrationLifecycle<B>;
 }
 
-export interface RegistrationTarget<T> {
-  asClass(Class: new (...deps: any[]) => T): RegistrationWithDependencies;
-  asFactory(factory: Factory<T>): RegistrationWithDependencies;
-  asValue(value: T): IContainerBuilder;
+export interface RegistrationTarget<V, B> {
+  asClass(Class: new (...args: any[]) => V): RegistrationWithDependencies<B>;
+  asFactory(factory: (...args: any[]) => V): RegistrationWithDependencies<B>;
+  asValue(value: V): B;
 }

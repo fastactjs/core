@@ -2,14 +2,14 @@ import type { Lifecycle, Factory, DepEntry, InjectionToken } from './types';
 
 export class Container {
   private registry = new Map<InjectionToken<any>, DepEntry<any>>();
-  private scoped = new Map<string, Map<InjectionToken<any>, any>>();
+  private scopeCaches = new Map<string, Map<InjectionToken<any>, any>>();
 
-  /** Registers a dependency factory and its dependency list. */
+  /** Registers a dependency factory, its dependencies, and its lifecycle. */
   register<T, D extends any[]>(
     token: InjectionToken<T>,
     factory: Factory<T, D>,
-    deps: InjectionToken<D[number]>[],
-    lifecycle: Lifecycle = 'scoped'
+    deps: InjectionToken<D[number]>[] = [],
+    lifecycle: Lifecycle = 'singleton'
   ): this {
     this.registry.set(token, {
       factory,
@@ -17,6 +17,7 @@ export class Container {
       lifecycle,
       isInitialized: false,
     });
+
     this.clearTokenFromScopes(token);
     return this;
   }
@@ -30,14 +31,12 @@ export class Container {
       instance: value,
       isInitialized: true,
     });
+
     this.clearTokenFromScopes(token);
     return this;
   }
 
-  /**
-  * Resolves a dependency. Scoped dependencies require a scope identifier,
-  * such as an HTTP request identifier.
-   */
+  /** Resolves a dependency according to its lifecycle. */
   get<T>(
     token: InjectionToken<T>,
     scopeId?: string,
@@ -46,45 +45,69 @@ export class Container {
   ): T {
     const entry = this.registry.get(token);
 
-    if (!entry) throw new Error(`Dependency ${String(token)} not found`);
-
-    if (entry.lifecycle === 'singleton') {
-      if (!entry.isInitialized) {
-        entry.instance = this.build(
-          token,
-          entry,
-          scopeId,
-          true,
-          resolutionPath
-        );
-        entry.isInitialized = true;
-      }
-      return entry.instance as T;
+    if (!entry) {
+      throw new Error(`Dependency ${String(token)} not found`);
     }
 
-    if (entry.lifecycle === 'scoped') {
-      if (resolvesSingleton) {
-        throw new Error(
-          `Singleton dependency chain cannot include scoped dependency ${String(token)}`
-        );
-      }
-      if (!scopeId) throw new Error(`Scope ID required for ${String(token)}`);
+    const resolvers = {
+      singleton: () =>
+        this.resolveSingleton(token, entry, scopeId, resolutionPath),
+      scoped: () =>
+        // prettier-ignore
+        this.resolveScoped(token, entry, scopeId, resolvesSingleton, resolutionPath),
+      transient: () =>
+        this.build(token, entry, scopeId, resolvesSingleton, resolutionPath),
+    };
 
-      if (!this.scoped.has(scopeId)) {
-        this.scoped.set(scopeId, new Map());
-      }
+    return resolvers[entry.lifecycle]?.();
+  }
 
-      const scopeCache = this.scoped.get(scopeId)!;
-      if (!scopeCache.has(token)) {
-        scopeCache.set(
-          token,
-          this.build(token, entry, scopeId, false, resolutionPath)
-        );
-      }
-      return scopeCache.get(token) as T;
+  private resolveSingleton<T>(
+    token: InjectionToken<T>,
+    entry: DepEntry<T>,
+    scopeId: string | undefined,
+    resolutionPath: InjectionToken<any>[]
+  ): T {
+    if (!entry.isInitialized) {
+      entry.instance = this.build(token, entry, scopeId, true, resolutionPath);
+      entry.isInitialized = true;
+    }
+    return entry.instance as T;
+  }
+
+  private resolveScoped<T>(
+    token: InjectionToken<T>,
+    entry: DepEntry<T>,
+    scopeId: string | undefined,
+    resolvesSingleton: boolean,
+    resolutionPath: InjectionToken<any>[]
+  ): T {
+    if (resolvesSingleton) {
+      throw new Error(
+        `Singleton dependency chain cannot include scoped dependency ${String(token)}`
+      );
     }
 
-    return this.build(token, entry, scopeId, resolvesSingleton, resolutionPath);
+    if (!scopeId) throw new Error(`Scope ID required for ${String(token)}`);
+
+    const scopeCache = this.getScopeCache(scopeId);
+    if (!scopeCache.has(token)) {
+      scopeCache.set(
+        token,
+        this.build(token, entry, scopeId, false, resolutionPath)
+      );
+    }
+    return scopeCache.get(token) as T;
+  }
+
+  private getScopeCache(scopeId: string): Map<InjectionToken<any>, any> {
+    let scopeCache = this.scopeCaches.get(scopeId);
+
+    if (!scopeCache) {
+      scopeCache = new Map();
+      this.scopeCaches.set(scopeId, scopeCache);
+    }
+    return scopeCache;
   }
 
   private build<T>(
@@ -106,24 +129,24 @@ export class Container {
     return entry.factory(...args);
   }
 
-  /** Creates an isolated scope for scoped dependencies. */
+  /** Creates a scoped resolver that reuses instances for the given scope ID. */
   createScope(id: string): ScopedContainer {
     return new ScopedContainer(this, id);
   }
 
   /** Removes all cached scoped dependencies for the specified scope. */
   clearScope(id: string): void {
-    this.scoped.delete(id);
+    this.scopeCaches.delete(id);
   }
 
   private clearTokenFromScopes(token: InjectionToken<any>): void {
-    for (const scopeCache of this.scoped.values()) {
+    for (const scopeCache of this.scopeCaches.values()) {
       scopeCache.delete(token);
     }
   }
 }
 
-/** A container with a predefined scope identifier. */
+/** Resolves dependencies within a predefined scope. */
 export class ScopedContainer {
   constructor(
     private parent: Container,

@@ -1,24 +1,28 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { glob } from 'node:fs/promises';
 import chalk from 'chalk';
+import { logger } from '../utils';
 import type {
-  IContainerBuilder,
   ContainerInstance,
   Factory,
   Lifecycle,
   InjectionToken,
   RegistrationTarget,
   RegistrationLifecycle,
-  RegistrationWithDependencies,
 } from './types';
 import { Container } from './container';
+
+/** Represents a module that can be loaded into the container builder. */
+export type ContainerModule = (builder: ContainerBuilder) => Promise<void>;
 
 /**
  * Dependency container builder with a fluent registration API.
  *
- * Example: `builder.add(DI.UserService).asClass(createUserService).withDeps(DI.Database).scoped()`.
+ * Example: `builder.add(DI.UserService).asClass(UserService).withDeps(DI.Database).scoped()`.
  */
-export class ContainerBuilder implements IContainerBuilder {
+export class ContainerBuilder {
   private container = new Container();
 
   private register<T>(
@@ -26,26 +30,26 @@ export class ContainerBuilder implements IContainerBuilder {
     factory: Factory<T>,
     deps: InjectionToken<any>[],
     lifecycle: Lifecycle
-  ): ContainerBuilder {
+  ): this {
     this.container.register(token, factory, deps, lifecycle);
     return this;
   }
 
   /**
-   * Starts dependency registration using its unique token.
+   * Starts dependency registration using its token.
    *
    * Specify a class with `asClass()`, a factory with `asFactory()`, or a ready
    * value with `asValue()`.
    */
-  add<T>(token: InjectionToken<T>): RegistrationTarget<T> {
+  add<T>(token: InjectionToken<T>): RegistrationTarget<T, this> {
     const withFactory = (factory: Factory<T>) => {
       // prettier-ignore
-      const withLifecycle = (deps: InjectionToken<any>[] = []): RegistrationLifecycle => ({
-        /** One instance per scope, such as an HTTP request. */
+      // prettier-ignore
+      const withLifecycle = (deps: InjectionToken<any>[] = []): RegistrationLifecycle<this> => ({
         scoped: () => this.register(token, factory, deps, 'scoped'),
-        /** One instance for the container's entire lifetime. */
+        /** Registers one instance for the container's entire lifetime. */
         singleton: () => this.register(token, factory, deps, 'singleton'),
-        /** A new instance each time the dependency is resolved. */
+        /** Registers a new instance for each resolution. */
         transient: () => this.register(token, factory, deps, 'transient'),
       });
 
@@ -65,6 +69,27 @@ export class ContainerBuilder implements IContainerBuilder {
       /** Specifies a class that the container instantiates with `new`. */
       asClass: (Class: new (...deps: any[]) => T) =>
         withFactory((...deps) => new Class(...deps)),
+
+      /*
+      withFactory((...deps) => {
+      const instance = new Class(...deps);
+      const allProps = new Set([
+        ...Object.getOwnPropertyNames(instance),
+        ...Object.getOwnPropertyNames(Object.getPrototypeOf(instance))
+      ]);
+
+      allProps.forEach((name) => {
+        if (name === 'constructor') return;
+        const value = (instance as any)[name];
+        if (typeof value === 'function' && value.prototype !== undefined) {
+          (instance as any)[name] = value.bind(instance);
+        }
+      });
+
+      return instance;
+    }),
+      */
+
       /** Specifies a factory that creates the dependency instance. */
       asFactory: (factory: Factory<T>) => withFactory(factory),
       /** Registers a ready value as a singleton dependency. */
@@ -80,51 +105,106 @@ export class ContainerBuilder implements IContainerBuilder {
 
     try {
       const runDir = path.dirname(process.argv[1]);
-      const modulesGlob = glob('**/*.module.{ts,js}', {
-        cwd: runDir,
-        exclude: (p) => p.includes('node_modules'),
-      });
+      const root = this.findProjectRoot(runDir);
+      const config = await this.loadConfig(root);
 
-      for await (const relativePath of modulesGlob) {
-        const fullPath = path.resolve(runDir, relativePath);
-        //console.log(
-        //  `${chalk.green.bold('[fastact]')} Found module file: ${relativePath}`
-        //);
+      const isTypeScriptRuntime =
+        process.argv[1]?.endsWith('.ts') ||
+        typeof (globalThis as typeof globalThis & { Bun?: unknown }).Bun !==
+          'undefined';
 
-        const moduleExport = require(fullPath);
-        moduleErrorName = fullPath;
-        const initModule = moduleExport.createContainerModule;
+      let masks: string[];
 
-        if (typeof initModule === 'function') {
-          await initModule(this);
-        } else {
-          console.warn(
-            `${chalk.yellow.bold('[fastact]')} File ${relativePath} skipped: missing "export function createContainerModule(builder) { ... }"`
-          );
+      if (isTypeScriptRuntime) {
+        masks =
+          config.modulesTs && config.modulesTs.length > 0
+            ? config.modulesTs
+            : ['src/**/*.module.ts'];
+      } else {
+        masks =
+          config.modules && config.modules.length > 0
+            ? config.modules
+            : ['dist/**/*.module.js'];
+      }
+
+      for (const mask of masks) {
+        const cleanPathMask = mask.startsWith('./') ? mask.slice(2) : mask;
+
+        const modulesGlob = glob(cleanPathMask, {
+          cwd: root,
+          exclude: (p) =>
+            p.includes('node_modules') ||
+            p.includes('.git') ||
+            (isTypeScriptRuntime ? p.endsWith('.js') : p.endsWith('.ts')), // Smart exclusion: ignore dist in TS runtime, ignore src in JS runtime
+        });
+
+        for await (const relativePath of modulesGlob) {
+          const fullPath = path.resolve(root, relativePath);
+          moduleErrorName = fullPath;
+
+          // In production this will be a native, fast import() of a plain JS file
+          const fileUrl = pathToFileURL(fullPath).href;
+          const moduleExport = await import(fileUrl);
+          const initModule = moduleExport.createContainerModule;
+
+          if (typeof initModule === 'function') {
+            await initModule(this);
+          } else {
+            throw new Error(
+              `Missing required "export function createContainerModule(builder) { ... }"`
+            );
+          }
         }
       }
     } catch (err) {
       console.log(
-        `${chalk.red.bold('[fastact]')} IoC auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
+        `${chalk.red.bold('[FastAct]')} IoC auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
       );
     }
 
-    const container = this.container;
-
-    /*     container.get = <T>(token: InjectionToken<T>): T => {
-      const key = token.description;
-      if (!key) {
-        throw new Error('Symbol token must have a description to be resolved!');
-      }
-
-      const dependency = container[key];
-      if (!dependency) {
-        throw new Error(`IoC dependency for Symbol(${key}) not found`);
-      }
-
-      return dependency;
-    }; */
-
     return this.container as unknown as ContainerInstance;
+  }
+
+  private findProjectRoot(startDir: string): string {
+    let currentDir = startDir;
+
+    while (currentDir !== path.parse(currentDir).root) {
+      if (existsSync(path.join(currentDir, 'package.json'))) {
+        return currentDir;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+    return startDir;
+  }
+
+  /** Helper method for loading the config with TS/JS support. */
+  private async loadConfig(
+    projectRootDir: string
+  ): Promise<{ modules?: string[]; modulesTs?: string[] }> {
+    const extensions = ['.ts', '.js', '.mts', '.mjs', '.cts', '.cjs'];
+    let configPath = '';
+
+    for (const ext of extensions) {
+      const file = path.join(projectRootDir, `fastact.config${ext}`);
+      if (existsSync(file)) {
+        configPath = file;
+        break;
+      }
+    }
+
+    if (!configPath) return {};
+
+    try {
+      // Convert the absolute path to a file:// URL (required for ESM import)
+      const fileUrl = pathToFileURL(configPath).href;
+      const configModule = await import(fileUrl);
+
+      return configModule.default || configModule;
+    } catch (err) {
+      console.log(
+        `${chalk.yellow.bold('[FastAct]')} Failed to load config file: ${err instanceof Error ? err.message : err}`
+      );
+      return {};
+    }
   }
 }

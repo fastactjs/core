@@ -15,5 +15,11 @@
   },
   "include": [
     "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/http",
+    "src/fastact.ts"
   ]
 }
