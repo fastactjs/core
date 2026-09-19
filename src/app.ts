@@ -1,11 +1,10 @@
-import chalk from 'chalk';
 import fastify, { FastifyInstance } from 'fastify';
+import { colorTag } from './internal/utils';
 import { type ContainerInstance, fastactIocPlugin } from './ioc';
 import type { NormalAppOptions, StandaloneAppOptions } from './types';
 import {
   DEFAULT_SERVER_HOST,
-  DEFAULT_SERVER_PORT,
-  LOG_PREFIX,
+  DEFAULT_SERVER_PORT
 } from './constants';
 
 export type AppOptions = NormalAppOptions &
@@ -42,7 +41,7 @@ export class App {
   async start(): Promise<void> {
     if (this.options.runServer === false) {
       // prettier-ignore
-      console.log(`${LOG_PREFIX.WARN} Standalone context initialized (CLI mode)`);
+      console.log(`${colorTag.WARN} Standalone context initialized (CLI mode)`);
       return;
     }
 
@@ -55,10 +54,9 @@ export class App {
     try {
       await this.server.listen({ port, host });
       console.log(
-        `${chalk.green.bold('[FastAct]')} Server is now listening on ${host}:${port}`
+        `${colorTag.SUCCESS} Server is now listening on ${host}:${port}`
       );
     } catch (err) {
-      // console.log(`${LOG_PREFIX.ERROR} ${err}`);
       throw err;
     }
   }
@@ -70,15 +68,15 @@ export class App {
 
     if (this.options.runServer !== false) return;
 
-    console.log(`${LOG_PREFIX.INFO} Standalone application stopped`);
+    console.log(`${colorTag.INFO} Standalone application stopped`);
     process.exit(0);
   }
 
   private async stopServer(): Promise<void> {
     if (!this.server) return;
 
-    console.log(`${LOG_PREFIX.WARN} Shutting down the server...`);
+    console.log(`${colorTag.WARN} Shutting down the server...`);
     await this.server.close();
-    console.log(`${LOG_PREFIX.INFO} Server gracefully stopped`);
+    console.log(`${colorTag.INFO} Server gracefully stopped`);
   }
 }

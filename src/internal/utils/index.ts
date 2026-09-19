@@ -1,0 +1,1 @@
+export { colorTag } from './color-tag';

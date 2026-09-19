@@ -2,8 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { glob } from 'node:fs/promises';
-import chalk from 'chalk';
-import { logger } from '../utils';
+import { colorTag } from '../internal/utils';
 import type {
   ContainerInstance,
   Factory,
@@ -157,8 +156,8 @@ export class ContainerBuilder {
         }
       }
     } catch (err) {
-      console.log(
-        `${chalk.red.bold('[FastAct]')} IoC auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
+      console.error(
+        `${colorTag.ERROR} IoC auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
       );
     }
 
@@ -201,8 +200,8 @@ export class ContainerBuilder {
 
       return configModule.default || configModule;
     } catch (err) {
-      console.log(
-        `${chalk.yellow.bold('[FastAct]')} Failed to load config file: ${err instanceof Error ? err.message : err}`
+      console.error(
+        `${colorTag.ERROR} Failed to load config file: ${err instanceof Error ? err.message : err}`
       );
       return {};
     }
