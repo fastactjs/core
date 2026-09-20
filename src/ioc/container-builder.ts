@@ -7,7 +7,7 @@ import type {
   ContainerInstance,
   Factory,
   Lifecycle,
-  InjectionToken,
+  Token,
   RegistrationTarget,
   RegistrationLifecycle,
 } from './types';
@@ -25,9 +25,9 @@ export class ContainerBuilder {
   private container = new Container();
 
   private register<T>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     factory: Factory<T>,
-    deps: InjectionToken<any>[],
+    deps: Token<any>[],
     lifecycle: Lifecycle
   ): this {
     this.container.register(token, factory, deps, lifecycle);
@@ -40,11 +40,11 @@ export class ContainerBuilder {
    * Specify a class with `asClass()`, a factory with `asFactory()`, or a ready
    * value with `asValue()`.
    */
-  add<T>(token: InjectionToken<T>): RegistrationTarget<T, this> {
+  add<T>(token: Token<T>): RegistrationTarget<T, this> {
     const withFactory = (factory: Factory<T>) => {
       // prettier-ignore
       // prettier-ignore
-      const withLifecycle = (deps: InjectionToken<any>[] = []): RegistrationLifecycle<this> => ({
+      const withLifecycle = (deps: Token<any>[] = []): RegistrationLifecycle<this> => ({
         scoped: () => this.register(token, factory, deps, 'scoped'),
         /** Registers one instance for the container's entire lifetime. */
         singleton: () => this.register(token, factory, deps, 'singleton'),
@@ -59,14 +59,14 @@ export class ContainerBuilder {
          * Accepts individual tokens or a single array of tokens.
          */
         withDeps: (
-          ...deps: Array<InjectionToken<any> | InjectionToken<any>[]>
+          ...deps: Array<Token<any> | Token<any>[]>
         ) => withLifecycle(deps.flat()),
       };
     };
 
     return {
       /** Specifies a class that the container instantiates with `new`. */
-      asClass: (Class: new (...deps: any[]) => T) =>
+      asClass: (Class: new (...deps: any[]) => T): any =>
         withFactory((...deps) => new Class(...deps)),
 
       /*
@@ -90,7 +90,7 @@ export class ContainerBuilder {
       */
 
       /** Specifies a factory that creates the dependency instance. */
-      asFactory: (factory: Factory<T>) => withFactory(factory),
+      asFactory: (factory: Factory<T>): any => withFactory(factory),
       /** Registers a ready value as a singleton dependency. */
       asValue: (value: T) => {
         this.container.registerValue(token, value);

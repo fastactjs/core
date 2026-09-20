@@ -1,14 +1,14 @@
-import type { Lifecycle, Factory, DepEntry, InjectionToken } from './types';
+import type { Lifecycle, Factory, DepEntry, Token } from './types';
 
 export class Container {
-  private registry = new Map<InjectionToken<any>, DepEntry<any>>();
-  private scopeCaches = new Map<string, Map<InjectionToken<any>, any>>();
+  private registry = new Map<Token<any>, DepEntry<any>>();
+  private scopeCaches = new Map<string, Map<Token<any>, any>>();
 
   /** Registers a dependency factory, its dependencies, and its lifecycle. */
   register<T, D extends any[]>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     factory: Factory<T, D>,
-    deps: InjectionToken<D[number]>[] = [],
+    deps: Token<D[number]>[] = [],
     lifecycle: Lifecycle = 'singleton'
   ): this {
     this.registry.set(token, {
@@ -23,7 +23,7 @@ export class Container {
   }
 
   /** Registers a ready value as a singleton dependency. */
-  registerValue<T>(token: InjectionToken<T>, value: T): this {
+  registerValue<T>(token: Token<T>, value: T): this {
     this.registry.set(token, {
       factory: () => value,
       deps: [],
@@ -38,10 +38,10 @@ export class Container {
 
   /** Resolves a dependency according to its lifecycle. */
   get<T>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     scopeId?: string,
     resolvesSingleton = false,
-    resolutionPath: InjectionToken<any>[] = []
+    resolutionPath: Token<any>[] = []
   ): T {
     const entry = this.registry.get(token);
 
@@ -63,10 +63,10 @@ export class Container {
   }
 
   private resolveSingleton<T>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     entry: DepEntry<T>,
     scopeId: string | undefined,
-    resolutionPath: InjectionToken<any>[]
+    resolutionPath: Token<any>[]
   ): T {
     if (!entry.isInitialized) {
       entry.instance = this.build(token, entry, scopeId, true, resolutionPath);
@@ -76,11 +76,11 @@ export class Container {
   }
 
   private resolveScoped<T>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     entry: DepEntry<T>,
     scopeId: string | undefined,
     resolvesSingleton: boolean,
-    resolutionPath: InjectionToken<any>[]
+    resolutionPath: Token<any>[]
   ): T {
     if (resolvesSingleton) {
       throw new Error(
@@ -100,7 +100,7 @@ export class Container {
     return scopeCache.get(token) as T;
   }
 
-  private getScopeCache(scopeId: string): Map<InjectionToken<any>, any> {
+  private getScopeCache(scopeId: string): Map<Token<any>, any> {
     let scopeCache = this.scopeCaches.get(scopeId);
 
     if (!scopeCache) {
@@ -111,11 +111,11 @@ export class Container {
   }
 
   private build<T>(
-    token: InjectionToken<T>,
+    token: Token<T>,
     entry: DepEntry<T>,
     scopeId: string | undefined,
     resolvesSingleton: boolean,
-    resolutionPath: InjectionToken<any>[]
+    resolutionPath: Token<any>[]
   ): T {
     if (resolutionPath.includes(token)) {
       const chain = [...resolutionPath, token].map(String).join(' -> ');
@@ -139,7 +139,7 @@ export class Container {
     this.scopeCaches.delete(id);
   }
 
-  private clearTokenFromScopes(token: InjectionToken<any>): void {
+  private clearTokenFromScopes(token: Token<any>): void {
     for (const scopeCache of this.scopeCaches.values()) {
       scopeCache.delete(token);
     }
@@ -153,7 +153,7 @@ export class ScopedContainer {
     public scopeId: string
   ) {}
 
-  get<T>(token: InjectionToken<T>): T {
+  get<T>(token: Token<T>): T {
     return this.parent.get(token, this.scopeId);
   }
 

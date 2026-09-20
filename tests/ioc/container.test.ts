@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Container } from '../../src/ioc/container';
-import { FastAct } from '../../src';
+import { Container, createToken } from '../../src/ioc';
 
 describe('Container', () => {
   let container: Container;
@@ -12,8 +11,9 @@ describe('Container', () => {
   describe('register', () => {
     it('registers and resolves a dependency', () => {
       const userService = { name: 'John' };
-      container.register('userService', () => userService, []);
-      expect(container.get('userService')).toBe(userService);
+      container.register('userService', () => userService);
+      const resolvedUserService = container.get('userService');
+      expect(resolvedUserService).toBe(userService);
     });
 
     it('passes resolved dependencies to the factory', () => {
@@ -83,6 +83,42 @@ describe('Container', () => {
       container.registerValue('config', config);
 
       expect(container.get('config')).toBe(config);
+    });
+  });
+
+  describe('token types', () => {
+    it('resolves a dependency using a class as a token', () => {
+      class EngineService {
+        start() {
+          return 'Hooray!';
+        }
+      }
+
+      container.register(EngineService, () => new EngineService());
+
+      const engine = container.get(EngineService);
+
+      expect(engine).toBeInstanceOf(EngineService);
+      expect(engine.start()).toBe('Hooray!');
+    });
+
+    it('resolves a dependency using a Symbol-token created via createToken', () => {
+      interface IDatabase {
+        query(sql: string): string;
+      }
+
+      const DbToken = createToken<IDatabase>('DatabaseToken');
+
+      const mockDb: IDatabase = {
+        query: (sql) => `Executed: ${sql}`,
+      };
+
+      container.register(DbToken, () => mockDb);
+
+      const db = container.get(DbToken);
+
+      expect(db).toBe(mockDb);
+      expect(db.query('SELECT 1')).toBe('Executed: SELECT 1');
     });
   });
 
