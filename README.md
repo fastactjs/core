@@ -1,10 +1,4 @@
-# ⚡ FastAct — Backend Without the Bullsh*it.
-
-**FastAct** is a lightweight, ultra-fast backend framework for Node.js built with **TypeScript** and **Fastify**.
-
-It is designed for engineers who are tired of bloated enterprise monsters, endless decorators, heavy reflection magic, and overwhelming boilerplate. **FastAct** brings back the joy of writing clean, explicit code without the ceremony.
-
-[Documentation (Coming Soon)] • [CLI Utility: fac] • [Community]
+<p align="center">The explicit <a href="https://nodejs.org" target="_blank">Node.js</a> framework on top of <a href="https://fastify.dev" target="_blank">Fastify</a>. Backend without the bullsh*t: no decorators, no boilerplate, no magic.</p><p align="center">
 
 ---
 
