@@ -1,4 +1,4 @@
-<p align="center">The explicit <a href="https://nodejs.org" target="_blank">Node.js</a> framework on top of <a href="https://fastify.dev" target="_blank">Fastify</a>. Backend without the bullsh*t: no decorators, no boilerplate, no magic.</p><p align="center">
+<p align="center">The explicit <a href="https://nodejs.org" target="_blank">Node.js</a> framework on top of <a href="https://fastify.dev" target="_blank">Fastify</a>.<br>Backend without the bullsh*t: no decorators, no boilerplate, no magic.</p><p align="center">
 
 ---
 
