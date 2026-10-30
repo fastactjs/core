@@ -1,58 +1,55 @@
 import fastify, { FastifyInstance } from 'fastify';
-import { colorTag } from './internal/utils';
-import { type ContainerInstance, fastactIocPlugin } from './ioc';
-import type { NormalAppOptions, StandaloneAppOptions } from './types';
-import {
-  DEFAULT_SERVER_HOST,
-  DEFAULT_SERVER_PORT
-} from './constants';
+import { colorTag } from './internal/utils/index.js';
+import { type ContainerInstance, fastactDiPlugin } from './di/index.js';
+import type { NormalAppOptions, StandaloneAppOptions } from './types.js';
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './constants.js';
 
 export type AppOptions = NormalAppOptions &
   StandaloneAppOptions & { runServer?: boolean };
 
 export class App {
-  private readonly container: ContainerInstance;
-  private readonly server!: FastifyInstance;
-  private readonly options: AppOptions;
+  #container: ContainerInstance;
+  #server!: FastifyInstance;
+  #options: AppOptions;
 
   constructor(container: ContainerInstance, options: AppOptions = {}) {
-    this.options = options;
-    this.container = container;
+    this.#options = options;
+    this.#container = container;
 
-    if (this.options.runServer !== false) {
-      this.server = fastify(this.options.server);
-      this.server.register(fastactIocPlugin, {
-        container: this.container as any,
+    if (this.#options.runServer !== false) {
+      this.#server = fastify(this.#options.server);
+      this.#server.register(fastactDiPlugin, {
+        container: this.#container as any,
       });
     }
   }
 
   getContainer(): ContainerInstance {
-    return this.container;
+    return this.#container;
   }
 
   getServer(): FastifyInstance {
-    if (!this.server) {
+    if (!this.#server) {
       throw new Error('Fastify server is not initialized in standalone mode');
     }
-    return this.server;
+    return this.#server;
   }
 
   async start(): Promise<void> {
-    if (this.options.runServer === false) {
+    if (this.#options.runServer === false) {
       // prettier-ignore
       console.log(`${colorTag.WARN} Standalone context initialized (CLI mode)`);
       return;
     }
 
     // Защита для TypeScript (хотя при runServer !== false сервер точно есть)
-    if (!this.server) return;
+    if (!this.#server) return;
 
-    const host = this.options.host ?? DEFAULT_SERVER_HOST;
-    const port = this.options.port ?? DEFAULT_SERVER_PORT;
+    const host = this.#options.host ?? DEFAULT_SERVER_HOST;
+    const port = this.#options.port ?? DEFAULT_SERVER_PORT;
 
     try {
-      await this.server.listen({ port, host });
+      await this.#server.listen({ port, host });
       console.log(
         `${colorTag.SUCCESS} Server is now listening on ${host}:${port}`
       );
@@ -66,17 +63,17 @@ export class App {
 
     await this.stopServer();
 
-    if (this.options.runServer !== false) return;
+    if (this.#options.runServer !== false) return;
 
     console.log(`${colorTag.INFO} Standalone application stopped`);
     process.exit(0);
   }
 
   private async stopServer(): Promise<void> {
-    if (!this.server) return;
+    if (!this.#server) return;
 
     console.log(`${colorTag.WARN} Shutting down the server...`);
-    await this.server.close();
+    await this.#server.close();
     console.log(`${colorTag.INFO} Server gracefully stopped`);
   }
 }

@@ -1,1 +1,1 @@
-export { colorTag } from './color-tag';
+export { colorTag } from './color-tag.js';

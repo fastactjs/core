@@ -1,7 +1,7 @@
-import type { AppConfig } from './types';
+import type { AppConfig } from './types.js';
 
 /**
- * Helper function to define FastAct configuration with TypeScript inference
+ * Helper function to define FastAct configuration.
  *
  * @example
  * ```ts
@@ -14,6 +14,6 @@ import type { AppConfig } from './types';
  * })
  * ```
  */
-export function defineConfig<T extends AppConfig = AppConfig>(config: T): T {
+export function defineConfig(config: AppConfig): AppConfig {
   return config;
 }

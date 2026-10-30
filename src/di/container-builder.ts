@@ -2,7 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { glob } from 'node:fs/promises';
-import { colorTag } from '../internal/utils';
+import { colorTag } from '../internal/utils/index.js';
 import type {
   ContainerInstance,
   Factory,
@@ -10,8 +10,9 @@ import type {
   Token,
   RegistrationTarget,
   RegistrationLifecycle,
-} from './types';
-import { Container } from './container';
+  Provider,
+} from './types.js';
+import { Container } from './container.js';
 
 /** Represents a module that can be loaded into the container builder. */
 export type ContainerModule = (builder: ContainerBuilder) => Promise<void>;
@@ -19,20 +20,13 @@ export type ContainerModule = (builder: ContainerBuilder) => Promise<void>;
 /**
  * Dependency container builder with a fluent registration API.
  *
- * Example: `builder.add(DI.UserService).asClass(UserService).withDeps(DI.Database).scoped()`.
+ * @example
+ * ```ts
+ * builder.register(DI.UserService).asClass(UserService).withDeps(DI.Database).singleton()
+ * ```
  */
 export class ContainerBuilder {
   private container = new Container();
-
-  private register<T>(
-    token: Token<T>,
-    factory: Factory<T>,
-    deps: Token<any>[],
-    lifecycle: Lifecycle
-  ): this {
-    this.container.register(token, factory, deps, lifecycle);
-    return this;
-  }
 
   /**
    * Starts dependency registration using its token.
@@ -40,16 +34,13 @@ export class ContainerBuilder {
    * Specify a class with `asClass()`, a factory with `asFactory()`, or a ready
    * value with `asValue()`.
    */
-  add<T>(token: Token<T>): RegistrationTarget<T, this> {
+  register<T>(token: Token<T>): RegistrationTarget<T, this> {
     const withFactory = (factory: Factory<T>) => {
       // prettier-ignore
-      // prettier-ignore
       const withLifecycle = (deps: Token<any>[] = []): RegistrationLifecycle<this> => ({
-        scoped: () => this.register(token, factory, deps, 'scoped'),
-        /** Registers one instance for the container's entire lifetime. */
-        singleton: () => this.register(token, factory, deps, 'singleton'),
-        /** Registers a new instance for each resolution. */
-        transient: () => this.register(token, factory, deps, 'transient'),
+        scoped: () => this.registerEntry(token, factory, deps, 'scoped'),
+        singleton: () => this.registerEntry(token, factory, deps, 'singleton'),
+        transient: () => this.registerEntry(token, factory, deps, 'transient'),
       });
 
       return {
@@ -58,39 +49,17 @@ export class ContainerBuilder {
          * Passes factory dependency tokens in the order of its arguments.
          * Accepts individual tokens or a single array of tokens.
          */
-        withDeps: (
-          ...deps: Array<Token<any> | Token<any>[]>
-        ) => withLifecycle(deps.flat()),
+        withDeps: (...deps: Array<Token<any> | Token<any>[]>) =>
+          withLifecycle(deps.flat()),
       };
     };
 
     return {
       /** Specifies a class that the container instantiates with `new`. */
-      asClass: (Class: new (...deps: any[]) => T): any =>
+      asClass: (Class: new (...deps: any[]) => T) =>
         withFactory((...deps) => new Class(...deps)),
-
-      /*
-      withFactory((...deps) => {
-      const instance = new Class(...deps);
-      const allProps = new Set([
-        ...Object.getOwnPropertyNames(instance),
-        ...Object.getOwnPropertyNames(Object.getPrototypeOf(instance))
-      ]);
-
-      allProps.forEach((name) => {
-        if (name === 'constructor') return;
-        const value = (instance as any)[name];
-        if (typeof value === 'function' && value.prototype !== undefined) {
-          (instance as any)[name] = value.bind(instance);
-        }
-      });
-
-      return instance;
-    }),
-      */
-
       /** Specifies a factory that creates the dependency instance. */
-      asFactory: (factory: Factory<T>): any => withFactory(factory),
+      asFactory: (factory: Factory<T>) => withFactory(factory),
       /** Registers a ready value as a singleton dependency. */
       asValue: (value: T) => {
         this.container.registerValue(token, value);
@@ -99,16 +68,26 @@ export class ContainerBuilder {
     };
   }
 
+  // Alias for `register()` to provide a more concise API.
+  add = this.register;
+  bind = this.register;
+
   async build(): Promise<ContainerInstance> {
     let moduleErrorName: string | undefined;
 
     try {
-      const runDir = path.dirname(process.argv[1]);
+      const entryPoint = process.env.pm_exec_path ?? process.argv[1];
+
+      if (!entryPoint) {
+        throw new Error('Unable to determine application entry point');
+      }
+
+      const runDir = path.dirname(path.resolve(entryPoint));
       const root = this.findProjectRoot(runDir);
       const config = await this.loadConfig(root);
 
       const isTypeScriptRuntime =
-        process.argv[1]?.endsWith('.ts') ||
+        /\.(?:ts|mts|cts)$/.test(entryPoint) ||
         typeof (globalThis as typeof globalThis & { Bun?: unknown }).Bun !==
           'undefined';
 
@@ -144,24 +123,72 @@ export class ContainerBuilder {
           // In production this will be a native, fast import() of a plain JS file
           const fileUrl = pathToFileURL(fullPath).href;
           const moduleExport = await import(fileUrl);
-          const initModule = moduleExport.createContainerModule;
+          /**
+           * Build container module via builder pattern.
+           * @deprecated Use createContainerModule instead.
+           */
+          const buildContainerModule = moduleExport.buildContainerModule;
 
-          if (typeof initModule === 'function') {
-            await initModule(this);
+          /**
+           * Create container module via declarative pattern.
+           * Recommended approach. Returns an array of providers.
+           */
+          const createContainerModule = moduleExport.createContainerModule;
+          if (typeof buildContainerModule === 'function') {
+            await buildContainerModule(this);
           } else {
             throw new Error(
-              `Missing required "export function createContainerModule(builder) { ... }"`
+              `Missing required "export function buildContainerModule(builder) { ... }"`
+            );
+          }
+
+          if (typeof createContainerModule === 'function') {
+            const moduleProviders = await createContainerModule();
+            this.addProviders(moduleProviders);
+          } else {
+            throw new Error(
+              `Missing required "export function createContainerModule() { ... }"`
             );
           }
         }
       }
     } catch (err) {
       console.error(
-        `${colorTag.ERROR} IoC auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
+        `${colorTag.ERROR} DI auto-load failed: ${err instanceof Error ? err.message : err} in the module: ${moduleErrorName}`
       );
     }
 
     return this.container as unknown as ContainerInstance;
+  }
+
+  private addProviders(providers: Provider[]): void {
+    for (const provider of providers) {
+      if ('useValue' in provider) {
+        this.container.registerValue(provider.provide, provider.useValue);
+      } else if ('useFactory' in provider) {
+        this.container.register(
+          provider.provide,
+          provider.useFactory,
+          provider.inject ?? []
+        );
+      } else {
+        this.container.register(
+          provider.provide,
+          (...deps) => new provider.useClass(...deps),
+          provider.inject ?? []
+        );
+      }
+    }
+  }
+
+  private registerEntry<T>(
+    token: Token<T>,
+    factory: Factory<T>,
+    deps: Token<any>[],
+    lifecycle: Lifecycle
+  ): this {
+    this.container.register(token, factory, deps, lifecycle);
+    return this;
   }
 
   private findProjectRoot(startDir: string): string {

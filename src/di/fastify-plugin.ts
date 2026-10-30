@@ -1,10 +1,8 @@
 import fp from 'fastify-plugin';
 import type {
-  FastifyPluginAsync,
-  FastifyInstance,
-  FastifyRequest as Request,
+  FastifyPluginAsync, FastifyRequest as Request
 } from 'fastify';
-import type { ContainerInstance, ScopedContainerInstance } from './types';
+import type { ContainerInstance, ScopedContainerInstance } from './types.js';
 
 interface InternalRootContainer extends ContainerInstance {
   createScope(id: string): InternalScopedContainer;
@@ -47,4 +45,4 @@ const plugin: FastifyPluginAsync<{ container: InternalRootContainer }> = async (
   });
 };
 
-export const fastactIocPlugin = fp(plugin, { name: '@fastact/ioc-plugin' });
+export const fastactDiPlugin = fp(plugin, { name: '@fastact/di-plugin' });

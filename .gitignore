@@ -1,5 +1,8 @@
 dist
 node_modules
+archive
+docs
+TODO.md
 
 # OS / editor
 .DS_Store

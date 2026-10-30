@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Container, createToken } from '../../src/ioc';
+import { Container, createToken } from '../../../src/di/index.js';
 
 describe('Container', () => {
   let container: Container;
@@ -119,6 +119,25 @@ describe('Container', () => {
 
       expect(db).toBe(mockDb);
       expect(db.query('SELECT 1')).toBe('Executed: SELECT 1');
+    });
+
+    it('resolves a dependency using a own-symbol token', () => {
+      interface IService {
+        doSomething(): string;
+      }
+
+      const ServiceToken = Symbol('ServiceToken');
+
+      const mockService: IService = {
+        doSomething: () => 'Done',
+      };
+
+      container.register(ServiceToken, () => mockService);
+
+      const service = container.get<IService>(ServiceToken);
+
+      expect(service).toBe(mockService);
+      expect(service.doSomething()).toBe('Done');
     });
   });
 

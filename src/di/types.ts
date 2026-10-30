@@ -12,19 +12,18 @@ export type Lifecycle = 'singleton' | 'scoped' | 'transient';
 /** Тип для любого класса-конструктора */
 export type Constructor<T> = new (...args: any[]) => T;
 
-/** 
+/**
  * Брендированный уникальный токен (в рантайме это нативный Symbol).
  * Фантомное поле __type нужно исключительно для магии типов TypeScript.
  */
-export type NewInjectionToken<T> = symbol & {
+export type InjectionToken<T> = symbol & {
   readonly __type?: T;
 };
 
-/** 
+/**
  * Универсальный входной тип для любых методов контейнера.
  */
-export type Token<T> = Constructor<T> | NewInjectionToken<T> | string;
-
+export type Token<T> = Constructor<T> | InjectionToken<T> | string;
 
 /** A symbol token carrying the type of the dependency it identifies. */
 export interface SymbolToken<T> extends Symbol {
@@ -53,9 +52,7 @@ export interface RegistrationLifecycle<B = any> {
 export interface RegistrationWithDependencies<
   B,
 > extends RegistrationLifecycle<B> {
-  withDeps(
-    ...deps: Array<OldInjectionToken<any> | OldInjectionToken<any>[]>
-  ): RegistrationLifecycle<B>;
+  withDeps(...deps: Array<Token<any> | Token<any>[]>): RegistrationLifecycle<B>;
 }
 
 export interface RegistrationTarget<V, B> {
@@ -63,3 +60,16 @@ export interface RegistrationTarget<V, B> {
   asFactory(factory: (...args: any[]) => V): RegistrationWithDependencies<B>;
   asValue(value: V): B;
 }
+
+export type Provider<T = any> =
+  | { provide: Token<T>; useValue: T } // Для готовых объектов (как наш orm после await)
+  | {
+      provide: Token<T>;
+      useFactory: (...args: any[]) => T | Promise<T>;
+      inject?: Token<any>[];
+    } // Для ленивых фабрик
+  | {
+      provide: Token<T>;
+      useClass: new (...args: any[]) => T;
+      inject?: Token<any>[];
+    }; // Если захочешь классы/сервисы

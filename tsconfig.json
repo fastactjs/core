@@ -18,8 +18,8 @@
   ],
   "exclude": [
     "node_modules",
+    "archive",
     "dist",
     "src/http",
-    "src/fastact.ts"
   ]
 }

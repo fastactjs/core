@@ -1,4 +1,4 @@
-import type { Lifecycle, Factory, DepEntry, Token } from './types';
+import type { Lifecycle, Factory, DepEntry, Token } from './types.js';
 
 export class Container {
   private registry = new Map<Token<any>, DepEntry<any>>();

@@ -6,7 +6,7 @@ import type {
   RawServerDefault,
   FastifyHttpOptions,
 } from 'fastify';
-import type { ContainerInstance, ContainerModule } from './ioc';
+import type { ContainerInstance } from './di/index.js';
 
 export interface Application {
   getContainer(): ContainerInstance;
@@ -34,22 +34,8 @@ export interface NormalAppOptions {
 export interface StandaloneAppOptions {}
 
 export interface AppConfig {
-  /**
-   * Glob patterns for compiled JS module files to auto-load.
-   *
-   * @example
-   * ```js
-   *   modules: ['./dist/**\/*.module.js'],
-   * ```
-   */
+  /** Path to the compiled JS module files to auto-load. */
   modules?: string[];
-  /**
-   * Glob patterns for TypeScript module files to auto-load.
-   *
-   * @example
-   * ```ts
-   * modulesTs: ['./src/**\/*.module.ts'],
-   * ```
-   */
+  /** Path to the TypeScript module files to auto-load. */
   modulesTs?: string[];
 }
